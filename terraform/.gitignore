@@ -1,0 +1,7 @@
+**/.terraform/*
+.terraform*
+backend.tfvars
+*.tfstate
+*.tfstate.*
+
+presonal.auto.tfvars
