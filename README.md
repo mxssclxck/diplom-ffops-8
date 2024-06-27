@@ -378,9 +378,31 @@ OpenTofu успешно инициализирован, backend с типом s3
 
 Все успешно созданные ВМ, сеть, подсеть, сервисный аккаунт, статический ключ и S3-bucket успешно удалились.
 
-гит воркфлоу пишем ТУТ
-
 ---
+Написан github workflow который будет автоматически применять, обновление кода OpenTofu (Terraform).
+
+Событие `workflow_dispatch` позволяет запускать применение и удаление кода в ручную.
+При нажатии на кнопку Run workflow видно 2 условия, первое при вводе `true` запустит удаление инфраструктуры, второе запустит ее создание.
+
+![alt text](/img/15.png)
+
+Также при `git push` кода OpenTofu (Terraform) в `master` ветку репы запустится автоматическое применение этого кода. Это давет автоматическое обновление облачой конфигурации при изменении каких либо ресурсов и параметров.
+
+Пример workflow запуска и удалени.
+
+![alt text](/img/16.png)
+
+![alt text](/img/17.png)
+
+Код Workflow досупен [terraform-cloud.yml](https://github.com/mxssclxck/diplom-ffops-8/blob/master/.github/workflows/terraform-cloud.yml)
+
+Выполненые [GitHub Actions](https://github.com/mxssclxck/diplom-ffops-8/actions) доступны по ссылке
+
+Полный код Terraform для создания сервисного аккаунта, статического ключа и S3-bucket доступны по ссылке [terraform-s3](https://github.com/mxssclxck/diplom-ffops-8/tree/master/terraform-s3)
+
+Полный код Terraform для создания сети, подсети, вм доступны по ссылке [terraform](https://github.com/mxssclxck/diplom-ffops-8/tree/master/terraform)
+
+Входе выполнения работы код может быть изменен или дополнен.
 
 ---
 
