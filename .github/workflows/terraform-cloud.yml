@@ -1,0 +1,82 @@
+# This is a basic workflow to help you get started with Actions
+
+name: 'OpenTofu CI/CD'
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "master" branch
+  push:
+    branches: [ "master" ]
+    paths:
+      -  'terraform/**'
+  pull_request:
+    branches: [ "master" ]
+    paths:
+      - 'terraform/**'
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      destroy:
+        description: 'Set to "true" to destroy infrastructure'
+        required: false
+        default: 'false'
+      apply:
+        description: 'Set to "true" to applay infrastructure changes'
+        required: false
+        default: 'false'
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  terraform:
+    name: 'OpenTofu (Terraform)'
+    runs-on: ubuntu-latest
+
+    env:
+      TOKEN: ${{ secrets.YC_TOKEN }}
+      CLOUD_ID: ${{ secrets.YC_CLOUD_ID }}
+      FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+      TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+      TF_VAR_ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+      TF_VAR_exclude_ansible: 'true'
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Set up OpenTofu (Terraform)
+      uses: opentofu/setup-opentofu@v1
+      with:
+        tofu_version: 1.7.2
+
+    - name: OpenTofu(Terraform) Init
+      run: tofu -chdir=./terraform init
+
+    - name: OpenTofu(Terraform) Format and Validate
+      run: tofu -chdir=./terraform validate
+
+    - name: OpenTofu(Terraform) Plan
+      run: |
+        tofu -chdir=./terraform plan -input=false -out=tfplan \
+        -var="token=${{ secrets.YC_TOKEN }}" \
+        -var="cloud_id=${{ secrets.YC_CLOUD_ID }}" \
+        -var="folder_id=${{ secrets.YC_FOLDER_ID }}" \
+        -var="exclude_ansible=${{ env.TF_VAR_exclude_ansible }}"
+
+    - name: OpenTofu (Terraform) Apply (Automatic Trigger)
+      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      run: tofu -chdir=./terraform apply -input=false tfplan
+
+    - name: OpenTofu (Terraform) Applu (Manual Trigger)
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'true'
+      run: tofu -chdir=./terraform apply -input=false tfplan
+
+    - name: OpenTofu (Terraform) Destroy (Manual Trigger)
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'true'
+      run: |
+        tofu -chdir=./terraform destroy -input=false -auto-approve \
+        -var="token=${{ secrets.YC_TOKEN }}" \
+        -var="cloud_id=${{ secrets.YC_CLOUD_ID }}" \
+        -var="folder_id=${{ secrets.YC_FOLDER_ID }}"
