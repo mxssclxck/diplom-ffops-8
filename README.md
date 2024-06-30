@@ -430,3 +430,36 @@ resource "local_file" "hosts_cfg_kubespray" {
 ```
 
 Данный код по пути ~/kubespray/inventory/mycluster/hosts.yml создаст файл hosts.yml и по шаблону автоматически заполнит его ip адресами нод.
+
+Файл шаблона выглядит так:
+
+```
+
+all:
+  hosts:%{ for idx, master in masters }
+    master:
+      ansible_host: ${master.network_interface[0].nat_ip_address}
+      ip: ${master.network_interface[0].ip_address}
+      access_ip: ${master.network_interface[0].nat_ip_address}%{ endfor }%{ for idx, worker in workers }
+    worker-${idx + 1}:
+      ansible_host: ${worker.network_interface[0].nat_ip_address}
+      ip: ${worker.network_interface[0].ip_address}
+      access_ip: ${worker.network_interface[0].nat_ip_address}%{ endfor }
+  children:
+    kube_control_plane:
+      hosts:%{ for idx, master in masters }
+        ${master.name}:%{ endfor }
+    kube_node:
+      hosts:%{ for idx, worker in workers }
+        ${worker.name}:%{ endfor }
+    etcd:
+      hosts:%{ for idx, master in masters }
+        ${master.name}:%{ endfor }
+    k8s_cluster:
+      children:
+        kube_control_plane:
+        kube_node:
+    calico_rr:
+      hosts: {}
+
+```
