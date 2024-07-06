@@ -404,9 +404,7 @@ OpenTofu успешно инициализирован, backend с типом s3
 
 Входе выполнения работы код может быть изменен или дополнен.
 
----
-
-Теперь развернем кластер K8S
+## Теперь развернем кластер K8S
 
 Успешно развернутая облачная инфраструктуру приступаю к развертыванию K8S кластера.
 
@@ -439,12 +437,10 @@ all:
   hosts:%{ for idx, master in masters }
     master:
       ansible_host: ${master.network_interface[0].nat_ip_address}
-      ip: ${master.network_interface[0].ip_address}
-      access_ip: ${master.network_interface[0].nat_ip_address}%{ endfor }%{ for idx, worker in workers }
+      ip: ${master.network_interface[0].ip_address}%{ endfor }%{ for idx, worker in workers }
     worker-${idx + 1}:
       ansible_host: ${worker.network_interface[0].nat_ip_address}
-      ip: ${worker.network_interface[0].ip_address}
-      access_ip: ${worker.network_interface[0].nat_ip_address}%{ endfor }
+      ip: ${worker.network_interface[0].ip_address}%{ endfor }
   children:
     kube_control_plane:
       hosts:%{ for idx, master in masters }
@@ -463,3 +459,421 @@ all:
       hosts: {}
 
 ```
+
+Перед запуском установки k8s на вм
+
+Необходимо установить `pip install -r requirements.txt` из папки kubespray.
+
+Потом запускаем команду установки
+Переходим в директорию `~/kubespray/`
+
+```
+ansible-playbook -i inventory/mycluster/hosts.yaml -u ubuntu -b -v --private-key=~/.ssh/id_ed25519 cluster.yml
+
+```
+
+Ждем завершения установки:
+
+![alt text](/img/19.png)
+
+Теперь нужно создать конфигурационный файл кластера K8S:
+
+Для этого надо подключится к мастер ноде и выполнить команды:
+
+![alt text](/img/20.png)
+
+Создаю директорию для хранения файла конфигурации, копируем созданный при установке Kubernetes кластера конфигурационный файл в созданную директорию и назначает права для пользователя на директорию и файл.
+
+Теперь надо проверить доступны ли поды и ноды кластера:
+
+![alt text](/img/21.png)
+
+Видно что поды и ноды кластера доступны и находятся в состоянии готовности, следовательно развернутый k8s успешно завершен.
+
+## Создам тестовое приложение
+
+1. Создан репозиторий для тестового приложения:
+
+![alt text](/img/22.png)
+
+Создана статичная страница которая будет показывать текст и картинку.
+
+![alt text](/img/23.png)
+
+![alt text](/img/24.png)
+
+Инициализирую git, делаю коммит и отправляю в репозиторий:
+
+![alt text](/img/25.png)
+
+![alt text](/img/26.png)
+
+Ссылка на [репозиторий](https://github.com/mxssclxck/diplom-website-test)
+
+2. Теперь напишу Dockerfile, который создаст контейнер с nginx и покажет страницу `index.html`.
+
+![alt text](/img/27.png)
+
+Теперь авторизуемся в Docker Hub:
+
+![alt text](/img/28.png)
+
+Создаем Docker image:
+
+`docker build -t mrmxssclxck/diplom-website-test:0.1 .`
+
+![alt text](/img/29.png)
+
+Проверяю создался image:
+
+`docker images`
+
+![alt text](/img/30.png)
+
+Образ создан.
+
+Теперь опубликую созданный image в Docker Hub:
+
+![alt text](/img/31.png)
+
+Перешел на сайт Docker Hub проверю загрузился ли образ:
+
+![alt text](/img/32.png)
+
+Ссылка на [Docker Hub](https://hub.docker.com/repository/docker/mrmxssclxck/diplom-website-test/general)
+
+Подготовка тестового приложения закончена.
+
+## Готовим систему мониторинка и деплой приложения
+
+Для удобства управления k8s кластером, скопирую конфигурационный файл с мастер ноды на свою локальную манишу и надо заменить IP адрес сервера:
+
+Копирую с сервака файл конфигурации 
+
+`scp ubuntu@:51.250.95.110~/.kube/config /home/thegamer8161/.kube/diplom/config`
+
+![alt text](/img/33.png)
+
+`export KUBECONFIG=~/.kube/diplom-k8s`
+
+`kubectl get nodes`
+
+Проверяю работу kubectl
+
+![alt text](/img/34.png)
+
+k8s кластер доступен с локальной машины.
+
+Добавим репозиторий `prometeus-community` для установки и использую `helm`:
+
+`helm repo add prometheus-community https://prometheus-community.github.io/helm-charts`
+
+`helm repo update`
+
+![alt text](/img/35.png)
+
+А для доступа к Grafana снаружи кластера k8s используем тип сервиса NodePort.
+
+Сохраним значение по умолчанию Helm чарта `prometheus-community` в файл и отредактируем его:
+
+`helm show values prometheus-community/kube-prometheus-stack > helm-prometeus/values.yaml`
+
+---
+
+`mkdir helm-prometheus`
+
+`helm show values prometheus-community/kube-prometheus-stack > helm-prometheus/values.yaml`
+
+![alt text](/img/36.png)
+---
+
+Изменим пароль по умолчанию в Grafana:
+
+![alt text](/img/37.png)
+
+Изменю порт у сервиса:
+
+![alt text](/img/38.png)
+
+```
+grafana:
+	service:
+		portName: http-web
+		type: NodePort
+		nodePort: 30050
+```
+
+И так теперь используя Helm и подготовленный файл значений `values.yaml` выполняю установку `prometheus-community`:
+
+`helm upgrade --install monitoring prometheus-community/kube-prometheus-stack --create-namespace -n monitoring -f helm-prometheus/values.yaml --kube-insecure-skip-tls-verify`
+
+![alt text](/img/39.png)
+
+При установке создается отдельный Namespace с названием `monitoring`
+
+Проверим результат установки:
+
+`kubectl -n monitoring get pods -o wide`
+`kubectl -n monitoring get svc -o wide`
+
+![alt text](/img/40.png)
+
+![alt text](/img/40_1.png)
+
+Установка выполнена.
+Файл значений `values.yaml`, использованный при установке `prometheus-community` доступен по [ссылке]()
+
+Открываем web-gui Grafana:
+
+![alt text](/img/41.png)
+
+Авторизуюсь с измененым паролем выше:
+
+![alt text](/img/42.png)
+
+Видно авторизация успешна данные о состоянии кластера отображаются на dashbord'ах
+
+![alt text](/img/43.png)
+
+Мониторинг успешно развернут.
+
+Теперь развернем тестовое приложение на k8s кластере.
+
+Создаем отдельный Namespace, в котором будем разворачивать тестовое приложение:
+
+`mkdir k8s-app`
+`cd k8s-app`
+`kubectl create namespace diplom-website`
+
+![alt text](/img/44.png)
+
+Готовим манифест Deployment с тестовым приложением:
+
+```yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diplom-ffops8-app
+  namespace: diplom-website
+  labels:
+    app: web-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+      - name: diplom-website
+        image: mrmxssclxck/diplom-website-test:0.1
+        resources:
+          requests:
+            cpu: "1"
+            memory: "200Mi"
+          limits:
+            cpu: "1"
+            memory:  "400Mi"
+        ports:
+        containerPort: 80`
+```
+
+Применим данный манифест Deploymetn и посмотрим результат:
+
+![alt text](/img/45.png)
+
+`kubectl apply -f deployment.yml -n diplom-website`
+
+`kubectl get deployment -n diplom-website`
+
+Как видно Deployment создан и запущен. Проверим работу:
+
+![alt text](/img/46.png)
+
+Приложение в рабочем состоянии.
+
+Ссылка на манифест [Deployment](/k8s-app/deployment.yml)
+
+Теперь готовим манифест сервиса NodePort для доступа к web-интерфейсу тестового приложения
+
+```yml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: diplom-ffops8-site-service
+  namespace: diplom-website
+spec:
+  type: NodePort
+  selector:
+    app: web-app
+  ports:
+  - protocol: TCP
+    port: 80
+    nodePort: 30051
+
+```
+
+Применим манифест сервиса и проверим результат:
+
+![alt text](/img/47.png)
+`kubectl apply -f service.yml -n diplom-website`
+
+`kubectl -n diplom-website get svc -o wide`
+
+Сервис создан. Проверим доступ к приложению из интернета
+
+![alt text](/img/48.png)
+
+Видно сайт открывается
+
+Ссылка на манифест [Service](/k8s-app/service.yml)
+
+Из-за указанного в Deployment две реплики приложения для обеспечения отказоустойчивости, необходимо балансировщик нагрузки.
+
+Готовим код OpenTofu (Terraform) для реализации балансировщика нагрузки. Создается группа балансирощика нагрузки она будет использоваться для балансировки м/у экземплярами.
+Создаем балансировщик с именем grafana, ему даем прослушивать на порту 3000, который будет перенаправлять трафик на порт 30050, настраиваем проверку работоспособности (healthcheck) на порту 30050. Еще создаем балансировщик с именем web-app, он будет прослушивать 80 порт, который будет перенаправлять трафик на порт 30051 так же проверку работоспособности (healthcheck) на порту 30051.
+
+Ссылка на код OpenTofu (Trraform) балансировщика нагрузки:
+[loadbalanser.tf](/terraform/loadbalanser.tf)
+
+После применения балансировщика к облачной инфраструктуре output будет выглятеть так:
+
+![alt text](/img/49.png)
+
+Проверим работу балансировщика нагрузки. Приложение будет открыватся по порту 80, а Grafana будет открываться по порту 3000:
+
+- Тестовое приложение
+
+![alt text](/img/50.png)
+
+- Grafana
+
+![alt text](/img/51.png)
+
+В Grafana видно что отобразились созданный Namespace и Deployment c подами
+
+Мониторин и тестовое приложение развернуто 
+
+## Установка и настройка CI/CD
+
+Для организации CI/CD буду использовать GitLab.
+
+Создан пустой проект в GitLab c именем `dimlom-website-test`
+
+![alt text](/img/52.png)
+
+Отправляю в GitLab репозиторий созданный ранее статичную страницу и Dockerfile.
+
+![alt text](/img/53.png)
+
+![alt text](/img/54.png)
+
+Для атоматизации процесса CI/CD нужен GitLab Runner, который будет выполнять задачи из файла .gitlab-ci.yml
+
+В GitLab создаю ранер для проекта.
+
+![alt text](/img/55.png)
+
+Подготавливаю k8s кластера к установке GitLab Runner.
+Создаю отдельный Namespace, в котором будет распологаться GitLab Runner и создам k8s secret, который будет использоваться для регистрации установленного GitLab Runner:
+
+![alt text](/img/56.png)
+
+Еще нужно подготовить файл значений values.yaml, для того, чтобы указать в нем количество Runners, время проверки наличия новых задач, настройка логирования, набор правил для доступа к ресурсам Kubernetes, ограничения на ресурсы процессора и памяти.
+
+Файл значений values.yaml, который будет использоваться при установке GitLab Runner доступен по ссылке: [values.yaml](/helm-runner/values.yml)
+
+Устанавливаем GitLab Runner. будем использовать Helm:
+
+![alt text](/img/57.png)
+
+Проверим результат установки
+
+![alt text](/img/58.png)
+
+GitLab Runner установили и запустили. Также можно через web-интерфейс проверить, подключился ли GitLab Runner к GitLab репозиторию:
+
+![alt text](/img/59.png)
+
+Подключение GitLab Runner к репозиторию GitLab завершено.
+
+Для выполнения GitLab CI/CD Pipeline нужно в настройках созданного проекта в разделе Variables указать переменные:
+
+![alt text](/img/60.png)
+
+В переменных указан адрес реестра Docker Hub, данные для авторизации в нем, а также имя собираемого образа и конфигурационный файл Kubernetes для доступа к развёрнутому выше кластеру. Для большей безопасности конфигурационный файл Kubernetes размещен в формате base64. 
+Также часть переменных будет указана в самом файле .gitlab-ci.yml.
+
+Написан конфигурайионный файл .gitlab-ci.yml для автоматической сборки docker image и деплоя приложения при изменении кода.
+
+Pipeline будет разделен на две стадии:
+
+1. На первой стадии (build) будет происходить авторизация в Docker Hub, сборка образа и его публикация в реестре Docker Hub. Сборка образа будет происходить только для main ветки и только в GitLab Runner с тегом diplom. Сам процесс сборки происходит следующим образом - если при git push указан тег, то Docker образ будет создан именно с этим тегом. Если при git push тэг не указывать, то Docker образ будет собран с тегом `latest`. Cборка будет происходить на основе контейнера `gcr.io/kaniko-project/executor:v1.22.0-debug`. 
+Так как не удалось запустить Docker-in-Docker в GitLab Runner и я получал ошибку доступа к docker.socket. 
+
+2. На второй стадии (deploy) будет применяться конфигурационный файл для доступа к кластеру Kubernetes и манифесты из git репозитория. Также будет перезапущен Deployment методом rollout restart для применения обновленного приложение. 
+Такой метод обновления полезен, например, если нужно обновить Frontend часть приложения незаметно для пользователя этого приложения. Эта стадия выполняться только для ветки master и на GitLab Runner с тегом diplom и только при условии, что первая стадия build была выполнена успешно.
+
+Проверим работу Pipeline. Исходная страница приложения:
+
+![alt text](/img/50.png)
+
+В процессе изменения и отправки в репозиторий были ошибки в коде `.gitlab-ci.yml`
+
+Не спервого раза применился deploy к куберу по этому с v0.2 прыгнул на v0.3
+
+![alt text](/img/61.png)
+
+В Docker Hub так же создался образ c v0.3
+
+![alt text](/img/62.png)
+
+И проверяю обновление на странице
+
+![alt text](/img/63.png)
+
+Теперь проверим что будет если просто пушим изменения без тега
+
+![alt text](/img/64.png)
+
+Проверим а что же происходит в докер хаб
+
+![alt text](/img/65.png)
+
+Оп image билд успешно создался c тегом `latest`.
+
+Но деплой на кубер также не прошел вывалился в ошибку. В итоге снова в опечатка была в `.gitlab-ci.yml`.
+
+![alt text](/img/66.png)
+
+В итоге все получилось.
+
+Ссылка на [пайплайн](https://gitlab.com/mrmxssclxck/diplom-website-test/-/pipelines) гитлаба 
+
+Итог
+
+- Репозиторий с конфигурационными файлами OpenTofu (Terraform)
+
+[terraform-s3](https://github.com/mxssclxck/diplom-ffops-8/tree/master/terraform-s3)
+
+[terraform](https://github.com/mxssclxck/diplom-ffops-8/tree/master/terraform)
+
+- CI/CD OpenTofu(Terraform) pipeline
+
+[workflow](https://github.com/mxssclxck/diplom-ffops-8/blob/master/.github/workflows/terraform-cloud.yml)
+
+Для разворачивания k8s был использован [Kubespray](https://github.com/kubernetes-sigs/kubespray)
+
+- Ссылка на [Docker Image](https://hub.docker.com/repository/docker/mrmxssclxck/diplom-website-test/tags)
+
+- Ссылка на тестовое приложение: [http://158.160.168.8/](http://158.160.168.8/)
+
+- Ссылка на web-gui Grafana c данными доступа:
+[http://158.160.166.53:3000/](http://158.160.166.53:3000/)
+
+`login: admin`\
+`password: netologyNDAfops8`

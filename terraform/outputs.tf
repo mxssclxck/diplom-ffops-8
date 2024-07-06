@@ -12,7 +12,7 @@ output "all_vms" {
     }]
   ])
 }
-/*
+
 output "Grafana_Network_Load_Balancer_Address" {
   value = yandex_lb_network_load_balancer.nlb-grafana.listener.*.external_address_spec[0].*.address
   description = "Адрес балансировщика для Grafana"
@@ -22,4 +22,3 @@ output "Web_App_Network_Load_Balancer_Address" {
   value = yandex_lb_network_load_balancer.nlb-web-app.listener.*.external_address_spec[0].*.address
   description = "Адрес балансировщика Web App"
 }
-*/
