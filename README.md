@@ -876,4 +876,4 @@ Pipeline будет разделен на две стадии:
 [http://158.160.166.53:3000/](http://158.160.166.53:3000/)
 
 `login: admin`\
-`password: netologyNDAfops8`
+`password: ************`
